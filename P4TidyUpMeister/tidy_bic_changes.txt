@@ -1,0 +1,46 @@
+Tidy Up Meister / Bicycle compatibility patch notes
+Date: 2026-08-05
+
+Changed file:
+C:/SteamLibrary/steamapps/workshop/content/108600/2769706949/mods/P4TidyUpMeister/42.15/media/lua/client/P4TidyUpMeister.lua
+
+Context:
+Tidy Up Meister restores the player's pre-action hand and worn-item state after timed actions. Bicycle mounts by moving the bicycle from world/inventory into the player's inventory, equipping the bike in both hands, then entering a BicycleActive or Bicycle_MountPending state. Tidy's restore pass could run during or after that mount sequence and restore the old hand state, leaving Bicycle with an active/pending mount but no bike equipped. Bicycle's own recovery then treats the bike as stranded and drops it back to the ground.
+
+What changed:
+Added Bicycle compatibility helpers in Tidy Up Meister:
+P4TidyUpMeister.isBicycleItem(item)
+P4TidyUpMeister.isBicycleAction(action)
+P4TidyUpMeister.hasQueuedBicycleAction(player)
+P4TidyUpMeister.shouldSkipForBicycle(player, action, item)
+
+The helper recognizes Bicycle.Bicycle and Bicycle.Bicycle_RedStreet by getType() and getFullType(). It also recognizes Bicycle timed actions and the Bicycle ground-pickup transfer flag action.bicycleMount.
+
+Tidy now skips and resets its pending restore state when any of these are true:
+Bicycle item is being equipped or transferred.
+BicycleHopOnAction, BicycleDismountAction, or BicycleThrowOverFenceAction is current or queued.
+The player has BicycleActive, Bicycle_Riding, Bicycle_MountPending, Dismounting, droppingBicycle, or Bicycle_Stopping set.
+The player currently has a Bicycle item in either hand.
+Tidy's saved pre-action primary or secondary hand item is a Bicycle item.
+
+Touched Tidy paths:
+ISWorldObjectContextMenu.equip wrapper now avoids starting a Tidy snapshot when the item being equipped is a bike.
+ISInventoryTransferAction.new/start wrappers now ignore Bicycle transfers.
+ISBaseTimedAction.stop now resets Tidy restore state instead of force-restoring during Bicycle actions/states.
+OnPlayerUpdate now resets Tidy restore state instead of re-equipping during Bicycle actions/states.
+set(), setTransferredItem(), reequip(), and forceReequip() now all have Bicycle skip guards.
+
+Why this should be safe:
+The patch is one-way defensive compatibility in Tidy Up Meister. It does not require Bicycle's local Lua modules to be globally visible, and it does not require BicycleMod to be enabled. If BicycleMod is absent, the item/type/variable checks simply return false. Non-bicycle actions keep the existing Tidy behavior.
+
+Coordination suggestion for Bicycle author:
+If possible, expose a tiny public compatibility API or stable flag for other mods, such as Bicycle.Utils.isBicycleItem(item) on a global namespace or a documented player variable/state predicate. Tidy-style mods can then skip restore logic during mount/dismount without duplicating Bicycle item type names or action names.
+
+Local note:
+This patch was applied only to the B42.15 branch of Tidy Up Meister because that is the active branch for the installed B42.15+ setup.
+
+Follow-up bicycle movement tweak:
+Changed file:
+C:/SteamLibrary/steamapps/workshop/content/108600/3461415167/mods/Bicycle/42.13/media/lua/client/Bicycle/Systems/RidingSystem.lua
+
+Disabled Bicycle's leg/foot injury speed penalty by keeping damageModifier at 1. Previously, a fractured leg or foot forced bike speed to 0.01x, and damaged leg/foot health below 75 reduced speed further. Other speed modifiers remain active: endurance, load, flat tyres, rough surfaces, trees, and zombie-contact slowdown.
